@@ -120,7 +120,7 @@ class Mesh:
         M.setdiag(values)
         M = M.tocsc()
         res = inv(M) * C
-        print(f'Laplacian operator form = {res.shape}')
+        # print(f'Laplacian operator form = {res.shape}')
         return res
 
     def heat_flow(self, func, step=1 / 1000, nsteps=1000, implicit=False):

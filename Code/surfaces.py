@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import multiprocessing as mp
 from typing import List, Tuple, Optional, Dict
@@ -39,8 +41,8 @@ class Surface:
         self.p0 = p0 if p0 is not None else np.full(self.n, 1 / self.n)
         self.p1 = p1 if p1 is not None else np.full(self.n, 1 / self.n)
 
-        self.p0 = np.array([0, 1] + [0] * (self.n - 2), dtype=float)
-        self.p1 = np.array([0, 0, 1] + [0] * (self.n - 3), dtype=float)
+        # self.p0 = np.array([0, 1] + [0] * (self.n - 2), dtype=float)
+        # self.p1 = np.array([0, 0, 1] + [0] * (self.n - 3), dtype=float)
 
         assert len(self.measure) == self.n
         assert len(self.p0) == self.n
@@ -245,7 +247,8 @@ class Surface:
                       [3 * i + 2 for i in faces_indices]
                 data = [*np.sqrt(self.areas[faces_indices])] * 3
 
-                sparse_faces_weights = scr.coo_matrix((data, (col, col)), shape=(3 * len(self.faces), 3 * len(self.faces)))
+                sparse_faces_weights = scr.coo_matrix((data, (col, col)),
+                                                      shape=(3 * len(self.faces), 3 * len(self.faces)))
 
                 neg_weighted_grad = sparse_faces_weights @ (Grad @ x_neg)
                 pos_weighted_grad = sparse_faces_weights @ (Grad @ x_pos)
@@ -377,8 +380,8 @@ def read_input() -> Surface:
     return polygon
 
 
-def read_file(filename):
-    with open(filename, 'r') as obj:
+def read_file(surface_filename, distr_filename):
+    with open(surface_filename, 'r') as obj:
         lines = [[f for f in s.split(' ') if len(f) > 0] for s in obj.read().split('\n')]
 
     vertices = [[float(coord) for coord in l[1:4]] for l in lines if len(l) > 3 and l[0] == 'v']
@@ -392,25 +395,39 @@ def read_file(filename):
         triangles.setdefault(face[1], []).append(i)
         triangles.setdefault(face[2], []).append(i)
 
-    polygon = Surface(np.array(vertices), np.array(faces), triangles)
+    with open(distr_filename, 'r') as file:
+        p0 = [float(x) for x in file.readline().split()]
+        p1 = [float(x) for x in file.readline().split()]
+
+    polygon = Surface(np.array(vertices), np.array(faces), triangles, p0=np.array(p0), p1=np.array(p1))
 
     return polygon
 
 
 def main():
-    # filename = 'sphere.txt'
-    filename = '../Data/teddy.obj'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--filename', '-f', required=True)
+    parser.add_argument('--distributions', '-d', dest='distr', required=True)
+
+    args = parser.parse_args()
+
     start_time = time.time()
-    polygon = read_file(filename)
+    surface = read_file(args.filename, args.distr)
 
     read_time = time.time()
-    print(f'Read time: {np.around(read_time - start_time, 3)}')
-    print(f'Sparse distance = {polygon.find_sparse_distance()}')
-    polygon.build_mesh(filename)
-    print(f'Hit method distance: {polygon.hit_method()}')
-    print(f'True distance: {np.linalg.norm(polygon.vertices[1] - polygon.vertices[2])}')
-
-    print(f'Search time: {np.around(time.time() - read_time, 3)}')
+    print(f'Reading time: {np.around(read_time - start_time, 3)}')
+    ############# SOCP ##############
+    surface.build_mesh(args.filename)
+    start_time = time.time()
+    print(f'Distance from hit method: {np.around(surface.hit_method(), 3)}')
+    print(f'Search time: {np.around(time.time() - start_time, 3)}')
+    ############# HIT ###############
+    if surface.n < 500:
+        start_time = time.time()
+        print(f'Distance from SOCP problem = {np.around(surface.find_sparse_distance(), 3)}')
+        print(f'Search time: {np.around(time.time() - start_time, 3)}')
+    else:
+        print('Too much vertices for SOCP problem')
 
 
 if __name__ == '__main__':
