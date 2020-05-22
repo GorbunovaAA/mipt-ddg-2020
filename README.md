@@ -5,7 +5,7 @@
 1. Склонировать репозиторий.
 2. Запустить код из командной строки можно командой:
 ```bash
-   $ python3 surfaces.py -f /path/to/surface/description -d /path/to/distributions/file
+   $ python3 surfaces.py -f /path/to/surface/description -d /path/to/distributions/file -o /path/to/output/file
 ```
 3. Для малых триангуляций расстояние EMD будет посчитано двумя способами: как решение задачи SOCP и решение задачи безусловной оптимизации.     
 Для больших триангуляций будет посчитано расстояние только способом решения задачи безусловной оптимизации.
