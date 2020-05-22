@@ -41,12 +41,9 @@ class Surface:
         self.p0 = p0 if p0 is not None else np.full(self.n, 1 / self.n)
         self.p1 = p1 if p1 is not None else np.full(self.n, 1 / self.n)
 
-        # self.p0 = np.array([0, 1] + [0] * (self.n - 2), dtype=float)
-        # self.p1 = np.array([0, 0, 1] + [0] * (self.n - 3), dtype=float)
-
         assert len(self.measure) == self.n
-        assert len(self.p0) == self.n
-        assert len(self.p1) == self.n
+        assert len(self.p0) == self.n, f'{self.n} vertices, {len(self.p0)} function values'
+        assert len(self.p1) == self.n, f'{self.n} vertices, {len(self.p1)} function values'
 
         assert np.abs(np.sum(self.measure) - 1) < EPS
         assert np.abs(np.sum(self.p0) - 1) < EPS
@@ -338,14 +335,39 @@ class Surface:
 
         return P
 
-    def hit_method(self):
+    def draw_vector_field(self, vector_field, filename='output.obj'):
+        div = np.zeros(self.n)
+
+        for edge_ind, edge in enumerate(self.edges):
+            edge_value = vector_field[edge_ind]
+            edge_len = np.linalg.norm(self.vertices[edge[0]] - self.vertices[edge[1]])
+            div[edge[0]] += edge_value / edge_len
+            div[edge[1]] -= edge_value / edge_len
+
+        with open(filename, 'w+') as obj:
+            low, high = min(div), max(div)
+            for i in range(self.n):
+                x, y, z = self.vertices[i]
+                color = (div[i] - low) / (high - low)
+                obj.write("v " + str(x) + " " + str(y) + " " + str(z) +
+                          " " + str((1 - color) * 255) + " " + str((1 - color) * 255) + " " + str(255) + "\n")
+
+            for face in self.faces:
+                obj.write("f " + str(face[0] + 1) + " " + str(face[1] + 1) + " " + str(face[2] + 1) + "\n")
+
+    def hit_method(self, filename='output.obj'):
         q = self.get_q()
         P = self.get_P()
         u = cp.Variable(len(self.faces))
-        problem = cp.Problem(cp.Minimize(cp.norm1(P @ u - q)))
+        # P - градиент с поворотом, u - g, q - градиент f
+        problem = cp.Problem(cp.Minimize(cp.norm1(P @ u + q)))
         problem.solve()
 
-        return np.linalg.norm(P @ u.value - q)
+        # векторное поле
+        J = P @ u.value + q
+        self.draw_vector_field(J, filename)
+
+        return np.linalg.norm(J)
 
 
 def read_input() -> Surface:
@@ -408,6 +430,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--filename', '-f', required=True)
     parser.add_argument('--distributions', '-d', dest='distr', required=True)
+    parser.add_argument('--out-filename', '-o', dest='output', required=True)
 
     args = parser.parse_args()
 
@@ -416,12 +439,12 @@ def main():
 
     read_time = time.time()
     print(f'Reading time: {np.around(read_time - start_time, 3)}')
-    ############# SOCP ##############
+    ############# HIT ##############
     surface.build_mesh(args.filename)
     start_time = time.time()
-    print(f'Distance from hit method: {np.around(surface.hit_method(), 3)}')
+    print(f'Distance from hit method: {np.around(surface.hit_method(args.output), 3)}')
     print(f'Search time: {np.around(time.time() - start_time, 3)}')
-    ############# HIT ###############
+    ############# SOCP ###############
     if surface.n < 500:
         start_time = time.time()
         print(f'Distance from SOCP problem = {np.around(surface.find_sparse_distance(), 3)}')
